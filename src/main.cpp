@@ -8,7 +8,7 @@
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 
-// #define CLEAR_CREDS
+//#define CLEAR_CREDS
 int Delay = 5000; // Main loop delay in ms
 
 void setupOTA()

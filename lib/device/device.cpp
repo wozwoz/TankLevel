@@ -10,7 +10,7 @@
 #include "../telnet/telnet.h"
 
 #define On_Board_LED_PIN 2
-#define SampleTime 5000
+#define SampleTime 60000
 #define ONE_WIRE_BUS 4
 #define INPIN 35
 
@@ -58,26 +58,36 @@ void Device::setup()
                     Adafruit_BMP280::FILTER_X16,      /* Filtering. */
                     Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
 }
-
+void Device::TestData()
+{
+    telnet.println("Adding Testing data to Device for Data Readings...");
+    _InsideTemp = 25.5;
+    _OutsideTemp = 25.5;
+    _Pressure = 1013.25;
+    _Down = true;
+}
 void Device::loop()
 {
     // Generate sensor data
+    if(millis() < _SampleTime) {
+        return;
+    }
+    
+    _SampleTime = millis() + SampleTime;
 
     int rssi = WiFi.RSSI(); // Get WiFi signal strength
 
-    float LocalTemp = 0.0;
-    float LocalPress = 0.0;
     if (_BMP_Found && bmp.takeForcedMeasurement())
     {
         // can now print out the new measurements
         Serial.print(F("Temperature = "));
-        LocalTemp = bmp.readTemperature();
-        Serial.print(LocalTemp);
+        _InsideTemp = bmp.readTemperature();
+        Serial.print(_InsideTemp);
         Serial.println(" *C");
 
         Serial.print(F("Pressure = "));
-        LocalPress = bmp.readPressure() / 100 + 76.66;
-        Serial.print(LocalPress); //- 1014.0 937.73.34 );
+        _Pressure = bmp.readPressure() / 100 + 76.66;
+        Serial.print(_Pressure); //- 1014.0 937.73.34 );
         Serial.println(" hPa");
 
         Serial.print(F("Approx altitude = "));
@@ -89,24 +99,31 @@ void Device::loop()
     else
     {
         Serial.println("Forced measurement failed!");
+        // load test data
+        TestData();
     }
 
     int AverageTankLevel = GetAverageTankLevel();
     // Build JSON payload using ArduinoJson
-       JsonDocument doc;
-       doc["outsidetemperature"] = ReadTemp();
-       doc["insidetemperature"] = LocalTemp;
-       doc["pressure"] = LocalPress;
-       doc["rssi"] = rssi;
-       doc["uptime"] = millis() / 1000;
-       doc["down"] = IsDown() ? "offline" : "online";
-       doc["tanklevel"] = AverageTankLevel;
+    JsonDocument doc;
+    JsonDocument subdoc;
+    doc["outsidetemperature"] = ReadTemp();
+    doc["insidetemperature"] = _InsideTemp;
+    doc["pressure"] = _Pressure;
 
-       char jsonBuffer[256];
-       serializeJson(doc, jsonBuffer);
+    doc["tanklevel"] = AverageTankLevel;
 
-       // Publish JSON to single topic
-       mqtt.publish("tanklevel/sensors", jsonBuffer);
+    subdoc["rssi"] = rssi;
+    subdoc["uptime"] = millis() / 1000;
+    subdoc["down"] = IsDown() ? "offline" : "online";
+    subdoc["ip"] = WiFi.localIP().toString();
+    doc["subdata"] = subdoc;
+
+    char jsonBuffer[256];
+    serializeJson(doc, jsonBuffer);
+
+    // Publish JSON to single topic
+    mqtt.publish("tanklevel/sensors", jsonBuffer);
     Serial.println("Published sensor data to MQTT:");
     delay(2000);
     if (payloadReady)
@@ -158,7 +175,7 @@ int Device::GetAverageTankLevel()
     for (int i = 0; i < SampleCount; i++)
     {
         Average += GetTankLevel();
-        delay(100); // delay(0.1 second);
+        delay(100); // delay(10 seconds);
     }
     // print out the values you read:
     telnet.println("ADC millivolts value = " + String(Average));
@@ -173,6 +190,7 @@ float Device::ReadTemp(void)
     telnet.print("Celsius temperature: ");
     // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
     rv = sensors.getTempCByIndex(0);
+    _OutsideTemp = rv;
     telnet.println(String(rv));
     return rv;
 }
