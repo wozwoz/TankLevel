@@ -10,7 +10,7 @@
 #include "../telnet/telnet.h"
 
 #define On_Board_LED_PIN 2
-#define SampleTime 60000
+//#define SampleTime 60000 // Sample time in ms
 #define ONE_WIRE_BUS 4
 #define INPIN 35
 
@@ -20,28 +20,31 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature sensor
 DallasTemperature sensors(&oneWire);
 
-Device::Device() {}
+Device::Device() {} // Constructor
 
 Device device;
 
 const int sensorIn = 34; // pin where the OUT pin from sensor is connected on Arduino
-#define SampleCount 16
 
 // Define static member variables
 bool Device::payloadReady = false;
 char Device::globalBuf[256] = {0};
+int Device::SampleCount = 5;
+//unsigned int Device::_averagetanklevel = 0;
+//unsigned int Device::_averagetanklevelCount = 0;
 
 void Device::setup()
 {
     static const char *subscription_list[] = {
-        "beacon"};
-    mqtt.set_subscriptions(subscription_list, 1);
+        "beacon",
+        "tanklevel/set/set_value"};
+    mqtt.set_subscriptions(subscription_list, 2);
     mqtt.set_callback(message_handler);
 
     // Publish initial status
     mqtt.publish("tanklevel/status", "online");
     mqtt.publish("tanklevel/ota/state", "ready");
-
+    _SampleTime = 1000;
     // if (!bmp.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID)) {
     if (!bmp.begin())
     {
@@ -68,12 +71,18 @@ void Device::TestData()
 }
 void Device::loop()
 {
+
     // Generate sensor data
-    if(millis() < _SampleTime) {
+    if(millis() < _LastMillis) {
+        device._averagetanklevel += GetAverageTankLevel();
+        device._averagetanklevelCount++;
+    //telnet.print("\nAverage Tank Level Readings: ");
+    //telnet.println(String(device._averagetanklevel));  
+    
         return;
     }
     
-    _SampleTime = millis() + SampleTime;
+    _LastMillis = millis() + _SampleTime;
 
     int rssi = WiFi.RSSI(); // Get WiFi signal strength
 
@@ -102,8 +111,15 @@ void Device::loop()
         // load test data
         TestData();
     }
+    if(device._averagetanklevelCount == 0) {
+        device._averagetanklevelCount = 1;
+    }
+    telnet.print("\nAverage Tank Level Readings: ");
+    telnet.println(String(device._averagetanklevel));  
+    telnet.print("\nAverage Tank Level Readings Count: ");
+    telnet.println(String(device._averagetanklevelCount));  
 
-    int AverageTankLevel = GetAverageTankLevel();
+    int AverageTankLevel = device._averagetanklevel / device._averagetanklevelCount;
     // Build JSON payload using ArduinoJson
     JsonDocument doc;
     JsonDocument subdoc;
@@ -111,7 +127,8 @@ void Device::loop()
     doc["insidetemperature"] = _InsideTemp;
     doc["pressure"] = _Pressure;
 
-    doc["tanklevel"] = AverageTankLevel;
+    if(AverageTankLevel > 0) 
+        doc["tanklevel"] = AverageTankLevel;
 
     subdoc["rssi"] = rssi;
     subdoc["uptime"] = millis() / 1000;
@@ -124,7 +141,7 @@ void Device::loop()
 
     // Publish JSON to single topic
     mqtt.publish("tanklevel/sensors", jsonBuffer);
-    Serial.println("Published sensor data to MQTT:");
+    Serial.println("Published sensor data to MQTT:");   
     delay(2000);
     if (payloadReady)
     {
@@ -132,6 +149,8 @@ void Device::loop()
         telnet.println(globalBuf);
         payloadReady = false;
     }
+    device._averagetanklevelCount = 0; // reset count
+    device._averagetanklevel = 0;
 }
 
 void Device::message_handler(char *topic, char *payload)
@@ -140,6 +159,21 @@ void Device::message_handler(char *topic, char *payload)
     telnet.print(topic);
     telnet.print(" / payload: ");
     telnet.println(payload);
+
+    // Handle set_value command
+    if (strcmp(topic, "tanklevel/set/set_value") == 0)
+    {
+        int value = atoi(payload);
+        if (value > 0 && value <= 100) {
+            device._SampleTime = value * 1000 * 60; // there is a delay of 1s in main loop, so multiply by 60 to get minutes
+            telnet.print("\tSample time set to: ");
+            telnet.print(value);
+            telnet.println(" minutes");
+        } else {
+            telnet.println("\tInvalid sample time (must be 1-100)");
+        }
+        return;
+    }
 
     // Handle OTA update trigger
     if (strcmp(payload, "OTA_UPDATE") == 0 || strcmp(payload, "UPDATE") == 0)
@@ -166,6 +200,8 @@ int Device::GetTankLevel()
     // read the analog / millivolts value for pin 2:
     int analogVolts = analogReadMilliVolts(INPIN);
     long tanklevel = map(analogVolts, 600, 2840, 0, 1550);
+    
+ 
 
     return tanklevel;
 }
@@ -175,10 +211,10 @@ int Device::GetAverageTankLevel()
     for (int i = 0; i < SampleCount; i++)
     {
         Average += GetTankLevel();
-        delay(100); // delay(10 seconds);
+        delay(10); // delay(.010 seconds);
     }
     // print out the values you read:
-    telnet.println("ADC millivolts value = " + String(Average));
+    //telnet.println("ADC millivolts value = " + String(Average));
 
     return Average / SampleCount;
 }

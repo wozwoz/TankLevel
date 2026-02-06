@@ -9,7 +9,7 @@
 #include <ESPmDNS.h>
 
 //#define CLEAR_CREDS
-int Delay = 5000; // Main loop delay in ms
+int Delay = 100; // Main loop delay in ms
 
 void setupOTA()
 {
@@ -56,18 +56,18 @@ void setup()
     telnet.println("\n\tank-Level-Controller Starting...\n");
 
     // Handle credentials
-    char ssid[32];
-    char pass[32];
+    char ssid[32] = {"BurradooAP"};
+    char pass[32] = {"2rachelle"};
 #ifdef CLEAR_CREDS
     telnet.println("\tClearing credentials");
     storage.clear_creds();
 #endif
-    if (!storage.creds_already_exist(ssid, pass))
+  /*  if (!storage.creds_already_exist(ssid, pass))
     {
         provisioner.get_creds(ssid, pass);
         storage.store_creds(ssid, pass);
     }
-
+*/
     // Connect WiFi
     WiFi.mode(WIFI_STA);
     wifi_tools.log_events();
@@ -95,22 +95,24 @@ void setup()
 
 void loop()
 {
+    // Handle telnet constantly to prevent disconnections
+    telnet.loop();
+    
     if (millis() % Delay == 0)
     {
-        telnet.print(".");
+        //telnet.print(".");
 
         if (wifi_tools.is_connected)
         {
             ArduinoOTA.handle();
             mqtt.maintain();
             device.loop();
-            telnet.print("\r\n");
+            //telnet.print("\r\n");
         }
         else
         {
             wifi_tools.reconnect();
             mqtt.report_disconnect();
         }
-        telnet.loop();
     }
 }

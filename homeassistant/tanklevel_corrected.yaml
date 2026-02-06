@@ -1,0 +1,184 @@
+# Home Assistant Package for TankLevel Device
+# Place this file in: config/packages/tanklevel.yaml
+# Make sure packages are enabled in configuration.yaml:
+# homeassistant:
+#   packages: !include_dir_named packages
+
+mqtt:
+  sensor:
+    - name: "TankLevel Outside Temperature"
+      unique_id: "tank_level_outside_temperature_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      value_template: "{{ value_json.outsidetemperature }}"
+      icon: mdi:thermometer
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        suggested_area: "Tank"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+
+    - name: "TankLevel Inside Temperature"
+      unique_id: "tank_level_inside_temperature_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      value_template: "{{ value_json.insidetemperature }}"
+      icon: mdi:thermometer
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        suggested_area: "Tank"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+
+    - name: "TankLevel Pressure"
+      unique_id: "tank_level_pressure_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "hPa"
+      device_class: pressure
+      value_template: "{{ value_json.pressure | default(0) }}"
+      icon: mdi:gauge
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        suggested_area: "Tank"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+
+    - name: "TankLevel Tank Level"
+      unique_id: "tank_level_distance_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "mm"
+      device_class: distance
+      value_template: "{{ value_json.tanklevel | default(0) }}"
+      icon: mdi:ruler
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+    - name: "TankLevel WiFi Signal"
+      unique_id: "tank_level_rssi_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "dBm"
+      device_class: signal_strength
+      value_template: "{{ value_json.subdata.rssi | default(0) }}"
+      icon: mdi:wifi
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+    - name: "TankLevel WiFi IP"
+      unique_id: "tank_level_ip_001"
+      state_topic: "tanklevel/sensors"
+      value_template: "{{ value_json.subdata.ip | default('0.0.0.0') }}"
+      icon: mdi:ip-network
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+    - name: "TankLevel Uptime"
+      unique_id: "tank_level_uptime_001"
+      state_topic: "tanklevel/sensors"
+      unit_of_measurement: "s"
+      device_class: duration
+      value_template: "{{ value_json.subdata.uptime | default(0) }}"
+      icon: mdi:timer-outline
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+  binary_sensor:
+    - name: "TankLevel Status"
+      unique_id: "tank_level_status_001"
+      state_topic: "tanklevel/sensors"
+      value_template: >-
+        {% if value_json.subdata.down == 'offline' %}
+          OFF
+        {% else %}
+          ON
+        {% endif %}
+      payload_on: "ON"
+      payload_off: "OFF"
+      device_class: connectivity
+      icon: mdi:check-network
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+  switch:
+    - name: "TankLevel OTA Update"
+      unique_id: "tank_level_ota_switch_001"
+      state_topic: "tanklevel/ota/state"
+      command_topic: "beacon"
+      payload_on: "UPDATE"
+      payload_off: "IDLE"
+      state_on: "updating"
+      state_off: "ready"
+      icon: mdi:upload
+      device:
+        identifiers:
+          - "TankLevel"
+        name: "TankLevel"
+        manufacturer: "MeatPi"
+        model: "TankLevel Data"
+        configuration_url: "http://homeassistant.local:8123/dashboard-tanklevel/0"
+        suggested_area: "Tank"
+
+# Input number for tank level sample duration
+input_number:
+  tank_level_sample_duration:
+    name: Tank Level Sample Duration
+    initial: 5
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: "s"
+    icon: mdi:timer
+
+# Automation to send slider value to Tank Level
+automation:
+  - id: tank_level_send_sample_duration
+    alias: "Send slider value to Tank Level"
+    trigger:
+      - platform: state
+        entity_id: input_number.tank_level_sample_duration
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "tanklevel/set/set_value"
+          payload: "{{ states('input_number.tank_level_sample_duration') | int }}"
+          retain: true
