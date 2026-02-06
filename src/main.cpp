@@ -56,8 +56,8 @@ void setup()
     telnet.println("\n\tank-Level-Controller Starting...\n");
 
     // Handle credentials
-    char ssid[32] = {"BurradooAP"};
-    char pass[32] = {"2rachelle"};
+    char ssid[32] = {WIFI_SSID};
+    char pass[32] = {WIFI_PASS};
 #ifdef CLEAR_CREDS
     telnet.println("\tClearing credentials");
     storage.clear_creds();
